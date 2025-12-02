@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: ai_video_postgres
+    environment:
+      POSTGRES_DB: ai_video_analytics
+      POSTGRES_USER: ai_user
+      POSTGRES_PASSWORD: ai_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ai_network
+
+  # FastAPI Application
+  app:
+    build: .
+    container_name: ai_video_app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://ai_user:ai_password@postgres:5432/ai_video_analytics
+      - API_KEY=my-super-secret-key-123
+      - DEBUG=True
+      - LLM_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+    networks:
+      - ai_network
+    volumes:
+      - ./app:/app/app
+      - ./main.py:/app/main.py
+      - ./requirements.txt:/app/requirements.txt
+
+  # Ollama LLM Service
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai_video_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ai_network
+    # Запуск в фоне для загрузки модели
+    command: ["ollama", "serve"]
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ai_video_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai_network
+    command: redis-server --appendonly yes
+
+volumes:
+  postgres_data:
+  ollama_data:
+  redis_data:
+
+networks:
+  ai_network:
+    driver: bridge
